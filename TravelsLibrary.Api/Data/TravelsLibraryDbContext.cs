@@ -10,6 +10,14 @@ namespace TravelsLibrary.Api.Data
 		{ 
 		}
 
+		protected override void OnModelCreating(ModelBuilder modelBuilder)
+		{
+			modelBuilder.Entity<User>()
+				.HasIndex(u => u.Email)
+				.IsUnique();
+		}
+
 		public DbSet<Trip> Trips { get; set; }
+		public DbSet<User> Users { get; set; }
 	}
 }

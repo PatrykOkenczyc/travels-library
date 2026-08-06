@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using TravelsLibrary.Api.Data;
 using TravelsLibrary.Api.Models;
+using TravelsLibrary.Api.DTOs;
 
 namespace TravelsLibrary.Api.Controllers
 {

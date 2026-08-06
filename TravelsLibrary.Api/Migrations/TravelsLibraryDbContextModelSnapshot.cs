@@ -44,6 +44,43 @@ namespace TravelsLibrary.Api.Migrations
 
                     b.ToTable("Trips");
                 });
+
+            modelBuilder.Entity("TravelsLibrary.Api.Models.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ResetAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResetCodeHash")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ResetExpire")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("Users");
+                });
 #pragma warning restore 612, 618
         }
     }
