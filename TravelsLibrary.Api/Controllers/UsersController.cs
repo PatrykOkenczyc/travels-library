@@ -1,13 +1,12 @@
-﻿using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using TravelsLibrary.Api.Data;
 using TravelsLibrary.Api.DTOs;
 using TravelsLibrary.Api.Models;
+using TravelsLibrary.Api.Services;
 
 namespace TravelsLibrary.Api.Controllers
 {
@@ -17,6 +16,12 @@ namespace TravelsLibrary.Api.Controllers
 	{
 		private readonly TravelsLibraryDbContext _context;
 		private readonly IConfiguration _configuration;
+		private static string HashResetCode(string code)
+		{
+			var bytes = Encoding.UTF8.GetBytes(code);
+			var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+			return Convert.ToBase64String(hash);
+		}
 
 		public UsersController(TravelsLibraryDbContext context, IConfiguration configuration)
 		{
@@ -50,9 +55,8 @@ namespace TravelsLibrary.Api.Controllers
 		}
 
 		[HttpPost("login")]
-		public async Task<ActionResult<string>> Login(LoginRequest request)
+		public async Task<ActionResult<string>> Login([FromServices] JwtService jwtService, LoginRequest request)
 		{
-
 			var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
 			if (user == null)
 			{
@@ -64,7 +68,7 @@ namespace TravelsLibrary.Api.Controllers
 				return BadRequest("Password was incorrect.");
 			}
 
-			var token = GenerateJwtToken(user);
+			var token = jwtService.GenerateToken(user);
 			return Ok(token);
 		}
 
@@ -84,31 +88,66 @@ namespace TravelsLibrary.Api.Controllers
 		}
 
 
-		private string GenerateJwtToken(User user)
+		[HttpPost("forgot-password")]
+		public async Task<ActionResult> ForgotPassword([FromServices] EmailService emailService, ForgotPasswordRequest request)
 		{
-			var jwtSettings = _configuration.GetSection("Jwt");
-			var secretKey = jwtSettings["SecretKey"];
-
-			var claims = new[]
+			var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+			if (user == null)
 			{
-		new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-		new Claim(JwtRegisteredClaimNames.Email, user.Email),
-		new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-	};
+				return Ok("If this email exists, a reset code has been sent.");
+			}
 
-			var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-			var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+			var resetCode = Random.Shared.Next(100000, 999999).ToString();
 
-			var token = new JwtSecurityToken(
-				issuer: jwtSettings["Issuer"],
-				audience: jwtSettings["Audience"],
-				claims: claims,
-				expires: DateTime.UtcNow.AddHours(1),
-				signingCredentials: creds
-			);
+			user.ResetCodeHash = HashResetCode(resetCode);
+			user.ResetExpire = DateTime.UtcNow.AddMinutes(15);
+			user.ResetAttempts = 0;
 
-			return new JwtSecurityTokenHandler().WriteToken(token);
+			await _context.SaveChangesAsync();
+			await emailService.SendPasswordResetEmailAsync(user.Email, resetCode);
+
+			return Ok("If this email exists, a reset code has been sent.");
 		}
+
+		[HttpPost("reset-password")]
+		public async Task<ActionResult> ResetPassword(ResetPasswordRequest request)
+		{
+			var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+			if (user == null || user.ResetCodeHash == null || user.ResetExpire == null)
+			{
+				return BadRequest("Invalid or expired reset code.");
+			}
+
+			if (user.ResetAttempts >= 5)
+			{
+				return BadRequest("Too many failed attempts. Please request a new code.");
+			}
+
+			if (user.ResetExpire < DateTime.UtcNow)
+			{
+				return BadRequest("Invalid or expired reset code.");
+			}
+
+			var providedCodeHash = HashResetCode(request.Code);
+			if (providedCodeHash != user.ResetCodeHash)
+			{
+				user.ResetAttempts++;
+				await _context.SaveChangesAsync();
+				return BadRequest("Invalid or expired reset code.");
+			}
+
+			user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+			user.ResetCodeHash = null;
+			user.ResetExpire = null;
+			user.ResetAttempts = 0;
+
+			await _context.SaveChangesAsync();
+
+			return Ok("Password has been reset successfully.");
+		}
+
+
+
 
 
 	}	

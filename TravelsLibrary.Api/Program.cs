@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using TravelsLibrary.Api.Data;
+using TravelsLibrary.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +32,8 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddDbContext<TravelsLibraryDbContext>(options =>
 	options.UseNpgsql(builder.Configuration.GetConnectionString("TravelsLibraryDb")));
+builder.Services.AddScoped<JwtService>();
+builder.Services.AddScoped<EmailService>();
 
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var secretKey = jwtSettings["SecretKey"];
